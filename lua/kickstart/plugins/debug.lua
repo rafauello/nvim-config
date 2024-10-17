@@ -7,17 +7,17 @@
 -- kickstart.nvim and not kitchen-sink.nvim ;)
 
 return {
-  -- Ensure that nvim-dap is installed only once
   'mfussenegger/nvim-dap',
 
   dependencies = {
-    'rcarriga/nvim-dap-ui', -- UI interface for nvim-dap
-    'thehamsta/nvim-dap-virtual-text', -- Optional: for virtual text display
-    'nvim-telescope/telescope-dap.nvim', -- Optional: integration with telescope
-    'nvim-neotest/nvim-nio', -- Required for nvim-dap-ui
-    'williamboman/mason.nvim', -- To manage installations
-    'jay-babu/mason-nvim-dap.nvim', -- Auto-install debug adapters
-    'leoluz/nvim-dap-go', -- Go adapter
+    'rcarriga/nvim-dap-ui',
+    'thehamsta/nvim-dap-virtual-text',
+    'nvim-telescope/telescope-dap.nvim',
+    'nvim-neotest/nvim-nio',
+    'williamboman/mason.nvim',
+    'jay-babu/mason-nvim-dap.nvim',
+    'leoluz/nvim-dap-go',
+    'julianolf/nvim-dap-lldb', -- Make sure this is included
   },
 
   config = function()
@@ -27,7 +27,7 @@ return {
     -- Setup Mason for nvim-dap
     require('mason-nvim-dap').setup {
       automatic_installation = true,
-      ensure_installed = { 'delve' }, -- Ensure that you have the delve debugger for Go
+      ensure_installed = { 'delve', 'codelldb' }, -- Ensure codelldb is installed
     }
 
     -- Dap UI setup
@@ -53,44 +53,32 @@ return {
       enabled = false,
     }
 
-    -- DAP Adapters
-    dap.adapters.cppdbg = {
-      id = 'cppdbg',
-      type = 'executable',
-      command = '/home/lasotar/.local/share/nvim/mason/bin/OpenDebugAD7',
-    }
-
-    dap.adapters.go = {
-      type = 'server',
-      port = 38697,
-      executable = {
-        command = 'dlv',
-        args = { 'dap', '-l', '127.0.0.1:38697' },
-      },
-    }
-
-    -- C++ debug configurations
-    dap.configurations.cpp = {
-      {
-        name = 'Launch file',
-        type = 'cppdbg',
-        request = 'launch',
-        program = function()
-          return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/', 'file')
-        end,
-        cwd = '${workspaceFolder}',
-        stopAtEntry = false, -- Change to false to start without stopping
-        setupCommands = {
+    -- Setup nvim-dap-lldb
+    require('dap-lldb').setup {
+      configurations = {
+        -- C lang configurations
+        c = {
           {
-            text = '-enable-pretty-printing', -- Helps with formatting complex types
-            description = 'enable pretty printing',
-            ignoreFailures = false,
+            name = 'Launch debugger',
+            type = 'lldb',
+            request = 'launch',
+            cwd = '${workspaceFolder}',
+            program = function()
+              -- Build with debug symbols
+              local out = vim.fn.system { 'make', 'debug' }
+              -- Check for errors
+              if vim.v.shell_error ~= 0 then
+                vim.notify(out, vim.log.levels.ERROR)
+                return nil
+              end
+              -- Return path to the debuggable program
+              return 'path/to/executable'
+            end,
           },
         },
       },
     }
-
-    dap.configurations.c = dap.configurations.cpp
+    dap.set_log_level 'DEBUG'
 
     -- Go debug configurations
     dap.configurations.go = {
@@ -116,6 +104,9 @@ return {
     vim.api.nvim_set_keymap('n', '<F10>', ":lua require'dap'.step_over()<CR>", { noremap = true, silent = true })
     vim.api.nvim_set_keymap('n', '<F11>', ":lua require'dap'.step_into()<CR>", { noremap = true, silent = true })
     vim.api.nvim_set_keymap('n', '<F12>', ":lua require'dap'.step_out()<CR>", { noremap = true, silent = true })
+    vim.api.nvim_set_keymap('n', '<leader>bc', ':lua require("dap").toggle_breakpoint()<CR>', { noremap = true, silent = true })
+    vim.api.nvim_set_keymap('n', '<leader>bC', ':lua require("dap").set_breakpoint(vim.fn.input("Condition: "))<CR>', { noremap = true, silent = true })
+    vim.api.nvim_set_keymap('n', '<leader>b<BS>', ':lua require("dap").terminate()<CR>', { noremap = true, silent = true })
 
     -- Automatically open dap UI
     dap.listeners.after.event_initialized['dapui_config'] = function()
